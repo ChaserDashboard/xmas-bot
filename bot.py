@@ -17,10 +17,13 @@ STREAMS = [
 GUILD_ID = int(os.getenv('GUILD_ID'))
 VOICE_CHANNEL_ID = int(os.getenv('VOICE_CHANNEL_ID'))
 
+COOKIES_FILE = '/app/cookies.txt'
+
 YDL_OPTS = {
     'format': 'bestaudio/best',
     'quiet': True,
     'no_warnings': True,
+    'cookiefile': COOKIES_FILE,
 }
 
 FFMPEG_OPTS = {
@@ -81,13 +84,11 @@ async def on_ready():
         return
 
     print(f'[Bot] Joining: {channel.name} (type: {channel.type})')
-
-    # Join and immediately request to speak (for stage channels)
     vc = await channel.connect()
 
     # If it's a stage channel, request to speak
     if isinstance(channel, discord.StageChannel):
-        print('[Bot] Stage channel detected — requesting to speak...')
+        print('[Bot] Stage channel — requesting to speak...')
         try:
             await guild.me.edit(suppress=False)
             print('[Bot] Now a speaker!')
