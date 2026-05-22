@@ -1,8 +1,7 @@
-FROM node:20
-RUN apt-get update && apt-get install -y python3 make g++ libsodium-dev
+FROM python:3.11
+RUN apt-get update && apt-get install -y ffmpeg
 WORKDIR /app
-COPY package*.json ./
-RUN npm install
-RUN npm install libsodium-wrappers tweetnacl
+COPY requirements.txt ./
+RUN pip install -r requirements.txt
 COPY . .
-CMD ["node", "bot.js"]
+CMD ["python", "bot.py"]
