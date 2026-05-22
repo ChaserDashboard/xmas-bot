@@ -1,3 +1,19 @@
+require('dotenv').config();
+
+// Load encryption FIRST before anything else
+try {
+  require('sodium-native');
+  console.log('[Bot] Using sodium-native for encryption');
+} catch {
+  try {
+    require('libsodium-wrappers');
+    console.log('[Bot] Using libsodium-wrappers for encryption');
+  } catch {
+    require('tweetnacl');
+    console.log('[Bot] Using tweetnacl for encryption');
+  }
+}
+
 const { Client, GatewayIntentBits } = require('discord.js');
 const {
   joinVoiceChannel,
@@ -9,7 +25,6 @@ const {
   StreamType,
 } = require('@discordjs/voice');
 const ytdl = require('ytdl-core');
-require('dotenv').config();
 
 const STREAMS = [
   { name: 'Video 1', url: 'https://youtu.be/8-Qx2kpTImA?si=wNB-wbKoXlc9fukG' },
@@ -85,23 +100,22 @@ function playNextStream() {
 async function connectAndPlay() {
   if (isShuttingDown) return;
 
-  console.log('[Bot] Attempting to connect...');
-  console.log('[Bot] Guild ID:', TARGET_GUILD_ID);
-  console.log('[Bot] Channel ID:', TARGET_CHANNEL_ID);
+  console.log('[Bot] Attempting to connect to voice channel...');
 
   const guild = client.guilds.cache.get(TARGET_GUILD_ID);
   if (!guild) {
-    console.error('[Bot] Guild not found! Check GUILD_ID env variable.');
+    console.error('[Bot] Guild not found! GUILD_ID:', TARGET_GUILD_ID);
+    setTimeout(connectAndPlay, RECONNECT_DELAY);
     return;
   }
 
   const channel = guild.channels.cache.get(TARGET_CHANNEL_ID);
   if (!channel) {
-    console.error('[Bot] Channel not found! Check VOICE_CHANNEL_ID env variable.');
+    console.error('[Bot] Channel not found! VOICE_CHANNEL_ID:', TARGET_CHANNEL_ID);
     return;
   }
 
-  console.log(`[Bot] Found channel: ${channel.name} (type: ${channel.type})`);
+  console.log(`[Bot] Joining: ${channel.name} (type: ${channel.type})`);
 
   try {
     connection = joinVoiceChannel({
@@ -112,7 +126,7 @@ async function connectAndPlay() {
     });
 
     await entersState(connection, VoiceConnectionStatus.Ready, 30_000);
-    console.log('[Bot] Connected to voice channel:', channel.name);
+    console.log('[Bot] Connected! Starting playback...');
 
     connection.subscribe(player);
     playStream(currentStreamIndex);
@@ -140,12 +154,10 @@ async function connectAndPlay() {
   }
 }
 
-// Use clientReady instead of ready to fix deprecation warning
-client.once('clientReady', async (c) => {
+client.once('ready', (c) => {
   console.log(`[Bot] Logged in as ${c.user.tag}`);
   player = createPlayer();
-  // Small delay to ensure guilds are cached
-  setTimeout(connectAndPlay, 2000);
+  setTimeout(connectAndPlay, 3000);
 });
 
 setInterval(() => {
