@@ -11,9 +11,12 @@ const {
 const ytdl = require('ytdl-core');
 require('dotenv').config();
 
-// ─────────────────────────────────────────────
-//  YouTube Videos to Play
-// ─────────────────────────────────────────────
+// Fix encryption error — load libsodium before anything else
+const sodium = require('libsodium-wrappers');
+sodium.ready.then(() => {
+  console.log('[Bot] Sodium ready');
+});
+
 const STREAMS = [
   { name: 'Video 1', url: 'https://youtu.be/8-Qx2kpTImA?si=wNB-wbKoXlc9fukG' },
   { name: 'Video 2', url: 'https://youtu.be/zw0xIbiw8fo?si=1eHsUgYfWF0MChqs' },
@@ -36,9 +39,6 @@ const client = new Client({
   intents: [GatewayIntentBits.Guilds, GatewayIntentBits.GuildVoiceStates],
 });
 
-// ─────────────────────────────────────────────
-//  Audio player
-// ─────────────────────────────────────────────
 function createPlayer() {
   const p = createAudioPlayer();
 
@@ -55,9 +55,6 @@ function createPlayer() {
   return p;
 }
 
-// ─────────────────────────────────────────────
-//  Play a YouTube video via ytdl-core
-// ─────────────────────────────────────────────
 async function playStream(index) {
   const entry = STREAMS[index % STREAMS.length];
   console.log(`[Bot] Now playing: ${entry.name} — ${entry.url}`);
@@ -66,7 +63,7 @@ async function playStream(index) {
     const ytStream = ytdl(entry.url, {
       filter: 'audioonly',
       quality: 'highestaudio',
-      highWaterMark: 1 << 25, // 32MB buffer to prevent stuttering
+      highWaterMark: 1 << 25,
     });
 
     const resource = createAudioResource(ytStream, {
@@ -86,23 +83,14 @@ function playNextStream() {
   playStream(currentStreamIndex);
 }
 
-// ─────────────────────────────────────────────
-//  Voice connection
-// ─────────────────────────────────────────────
 async function connectAndPlay() {
   if (isShuttingDown) return;
 
   const guild = client.guilds.cache.get(TARGET_GUILD_ID);
-  if (!guild) {
-    console.error('[Bot] Guild not found. Check GUILD_ID in .env');
-    return;
-  }
+  if (!guild) { console.error('[Bot] Guild not found'); return; }
 
   const channel = guild.channels.cache.get(TARGET_CHANNEL_ID);
-  if (!channel) {
-    console.error('[Bot] Voice channel not found. Check VOICE_CHANNEL_ID in .env');
-    return;
-  }
+  if (!channel) { console.error('[Bot] Voice channel not found'); return; }
 
   try {
     connection = joinVoiceChannel({
@@ -119,7 +107,7 @@ async function connectAndPlay() {
     playStream(currentStreamIndex);
 
     connection.on(VoiceConnectionStatus.Disconnected, async () => {
-      console.warn('[Bot] Disconnected — attempting to reconnect...');
+      console.warn('[Bot] Disconnected — reconnecting...');
       try {
         await Promise.race([
           entersState(connection, VoiceConnectionStatus.Signalling, 5_000),
@@ -132,7 +120,6 @@ async function connectAndPlay() {
     });
 
     connection.on(VoiceConnectionStatus.Destroyed, () => {
-      console.warn('[Bot] Connection destroyed — reconnecting...');
       if (!isShuttingDown) setTimeout(connectAndPlay, RECONNECT_DELAY);
     });
 
@@ -142,11 +129,9 @@ async function connectAndPlay() {
   }
 }
 
-// ─────────────────────────────────────────────
-//  Client events
-// ─────────────────────────────────────────────
-client.once('ready', () => {
+client.once('ready', async () => {
   console.log(`[Bot] Logged in as ${client.user.tag}`);
+  await sodium.ready;
   player = createPlayer();
   connectAndPlay();
 });
@@ -157,12 +142,8 @@ setInterval(() => {
   }
 }, 10 * 60 * 1000);
 
-// ─────────────────────────────────────────────
-//  Graceful shutdown
-// ─────────────────────────────────────────────
 process.on('SIGINT', () => {
   isShuttingDown = true;
-  console.log('[Bot] Shutting down...');
   if (connection) connection.destroy();
   client.destroy();
   process.exit(0);
