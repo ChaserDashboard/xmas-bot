@@ -74,10 +74,22 @@ async def play_next(vc):
         await play_next(vc)
 
 
+async def connect_with_retry(channel, retries=5):
+    for attempt in range(retries):
+        try:
+            print(f'[Bot] Connection attempt {attempt + 1}...')
+            vc = await channel.connect(timeout=60.0, reconnect=True)
+            return vc
+        except Exception as e:
+            print(f'[Bot] Attempt {attempt + 1} failed: {e}')
+            await asyncio.sleep(5)
+    return None
+
+
 @client.event
 async def on_ready():
     print(f'[Bot] Logged in as {client.user}')
-    await asyncio.sleep(2)
+    await asyncio.sleep(3)
 
     guild = client.get_guild(GUILD_ID)
     if not guild:
@@ -90,7 +102,12 @@ async def on_ready():
         return
 
     print(f'[Bot] Joining: {channel.name}')
-    vc = await channel.connect()
+    vc = await connect_with_retry(channel)
+
+    if not vc:
+        print('[Bot] Failed to connect after all retries!')
+        return
+
     print('[Bot] Connected! Starting playback...')
     await play_next(vc)
 
