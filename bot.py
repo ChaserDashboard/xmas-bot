@@ -2,6 +2,8 @@ import discord
 import asyncio
 import yt_dlp
 import os
+import threading
+from http.server import HTTPServer, BaseHTTPRequestHandler
 from dotenv import load_dotenv
 
 load_dotenv()
@@ -31,6 +33,23 @@ FFMPEG_OPTS = {
     'options': '-vn',
 }
 
+# ── Tiny health-check server so fly.io doesn't kill the machine ──
+class HealthHandler(BaseHTTPRequestHandler):
+    def do_GET(self):
+        self.send_response(200)
+        self.end_headers()
+        self.wfile.write(b'OK')
+    def log_message(self, *args):
+        pass  # suppress access logs
+
+def start_health_server():
+    server = HTTPServer(('0.0.0.0', 8080), HealthHandler)
+    server.serve_forever()
+
+threading.Thread(target=start_health_server, daemon=True).start()
+print('[Bot] Health server running on port 8080')
+
+# ── Discord bot ──
 intents = discord.Intents.default()
 intents.voice_states = True
 client = discord.Client(intents=intents)
