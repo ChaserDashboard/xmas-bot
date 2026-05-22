@@ -20,7 +20,7 @@ VOICE_CHANNEL_ID = int(os.getenv('VOICE_CHANNEL_ID'))
 COOKIES_FILE = '/app/cookies.txt'
 
 YDL_OPTS = {
-    'format': 'bestaudio/best',
+    'format': 'bestaudio',
     'quiet': True,
     'no_warnings': True,
     'cookiefile': COOKIES_FILE,
@@ -41,7 +41,14 @@ current_index = 0
 def get_audio_url(url):
     with yt_dlp.YoutubeDL(YDL_OPTS) as ydl:
         info = ydl.extract_info(url, download=False)
-        return info['url']
+        # Get the best audio format URL
+        if 'url' in info:
+            return info['url']
+        # If multiple formats, pick the first audio one
+        for f in info.get('formats', []):
+            if f.get('acodec') != 'none':
+                return f['url']
+        raise Exception('No audio format found')
 
 
 async def play_next(vc):
@@ -61,6 +68,7 @@ async def play_next(vc):
             asyncio.run_coroutine_threadsafe(play_next(vc), client.loop)
 
         vc.play(source, after=after_play)
+        print(f'[Bot] Playback started!')
     except Exception as e:
         print(f'[Bot] Failed to play {entry["name"]}: {e}')
         current_index = (current_index + 1) % len(STREAMS)
@@ -84,21 +92,19 @@ async def on_ready():
         return
 
     print(f'[Bot] Joining: {channel.name} (type: {channel.type})')
-    vc = await channel.connect()
 
-    # If it's a stage channel, request to speak
+    # For stage channels, connect as speaker directly
     if isinstance(channel, discord.StageChannel):
-        print('[Bot] Stage channel — requesting to speak...')
+        vc = await channel.connect()
+        await asyncio.sleep(1)
         try:
+            # Become a speaker immediately
             await guild.me.edit(suppress=False)
-            print('[Bot] Now a speaker!')
+            print('[Bot] Now a speaker in stage!')
         except Exception as e:
-            print(f'[Bot] Could not become speaker: {e}')
-            try:
-                await guild.me.request_to_speak()
-                print('[Bot] Requested to speak!')
-            except Exception as e2:
-                print(f'[Bot] Request to speak failed: {e2}')
+            print(f'[Bot] Speaker error: {e}')
+    else:
+        vc = await channel.connect()
 
     print('[Bot] Starting playback...')
     await play_next(vc)
@@ -107,6 +113,20 @@ async def on_ready():
         await client.change_presence(activity=discord.Activity(
             type=discord.ActivityType.listening, name='music 24/7'))
         await asyncio.sleep(600)
+
+
+@client.event
+async def on_voice_state_update(member, before, after):
+    # If bot gets moved to audience, move itself back to speaker
+    if member == client.user:
+        if after.suppress:
+            print('[Bot] Got suppressed — trying to become speaker again...')
+            guild = member.guild
+            try:
+                await guild.me.edit(suppress=False)
+                print('[Bot] Back as speaker!')
+            except Exception as e:
+                print(f'[Bot] Could not unsuppress: {e}')
 
 
 client.run(os.getenv('DISCORD_TOKEN'))
