@@ -12,28 +12,24 @@ const { stream } = require('play-dl');
 require('dotenv').config();
 
 // ─────────────────────────────────────────────
-//  Christmas Radio Streams
-//  All are free, public, 24/7 Christmas streams.
-//  The bot cycles through them so if one goes
-//  down it automatically tries the next one.
+//  YouTube Videos to Play
+//  Add or remove YouTube URLs here.
+//  The bot plays them in order and loops forever.
 // ─────────────────────────────────────────────
 const STREAMS = [
-  { name: 'Classic Christmas Radio',     url: 'https://stream.rcast.net/radio/8040/stream' },
-  { name: 'Christmas Music Radio',       url: 'https://cloudstream2023.haystack.tv/live/christmas/playlist.m3u8' },
-  { name: 'SomaFM Christmas Lounge',     url: 'https://ice4.somafm.com/christmas-128-mp3' },
-  { name: 'SomaFM Christmas Rocks',      url: 'https://ice4.somafm.com/xmasrocks-128-mp3' },
-  { name: 'SomaFM Jolly Ol\' Soul',      url: 'https://ice4.somafm.com/jollysoul-128-mp3' },
-  { name: 'RadioParadise Xmas',          url: 'http://stream.radioparadise.com/christmas-128' },
-  { name: 'iHeart Christmas',            url: 'https://stream.revma.ihrhls.com/zc2089/hls.m3u8' },
-  { name: '977 Music Christmas',         url: 'https://playerservices.streamtheworld.com/api/livestream-redirect/977_XMAS.mp3' },
-  { name: 'JingleBell Radio',            url: 'https://jinglebell.radio/stream/high.mp3' },
-  { name: 'North Pole Radio',            url: 'https://stream.laut.fm/northpoleradio' },
+  { name: 'Video 1', url: 'https://youtu.be/8-Qx2kpTImA?si=wNB-wbKoXlc9fukG' },
+  { name: 'Video 2', url: 'https://youtu.be/zw0xIbiw8fo?si=1eHsUgYfWF0MChqs' },
+  { name: 'Video 3', url: 'https://youtu.be/JN0lN2S_3jE?si=DUuro_vGcLTG2VwJ' },
+  { name: 'Video 3', url: 'https://youtu.be/YUCMqFrJ2aM?si=sbgLA5kW_ms26IJt' },
+  { name: 'Video 3', url: 'https://youtu.be/fefwYey8rAs?si=Q6oMZBguyOtr_f3L' },
+
+  // Add more videos here...
 ];
 
 const TARGET_GUILD_ID   = process.env.GUILD_ID;
 const TARGET_CHANNEL_ID = process.env.VOICE_CHANNEL_ID;
-const RECONNECT_DELAY   = 5_000;   // ms before retrying after a failure
-const STREAM_SWITCH_DELAY = 3_000; // ms before switching to next stream
+const RECONNECT_DELAY   = 5_000;
+const STREAM_SWITCH_DELAY = 3_000;
 
 let currentStreamIndex = 0;
 let player;
@@ -51,7 +47,7 @@ function createPlayer() {
   const p = createAudioPlayer();
 
   p.on(AudioPlayerStatus.Idle, () => {
-    console.log('[Player] Stream ended or went idle — switching to next stream...');
+    console.log('[Player] Video ended — moving to next...');
     setTimeout(playNextStream, STREAM_SWITCH_DELAY);
   });
 
@@ -64,21 +60,21 @@ function createPlayer() {
 }
 
 // ─────────────────────────────────────────────
-//  Play — fetch stream and hand to player
+//  Play — fetch YouTube stream and hand to player
 // ─────────────────────────────────────────────
 async function playStream(index) {
   const entry = STREAMS[index % STREAMS.length];
-  console.log(`[Bot] Playing: ${entry.name} — ${entry.url}`);
+  console.log(`[Bot] Now playing: ${entry.name} — ${entry.url}`);
 
   try {
-    // play-dl handles both direct mp3 streams and m3u8 playlists
+    // play-dl handles YouTube URLs natively
     const source = await stream(entry.url, { quality: 2, discordPlayerCompatibility: true });
     const resource = createAudioResource(source.stream, {
       inputType: source.type ?? StreamType.Arbitrary,
     });
     player.play(resource);
   } catch (err) {
-    console.error(`[Bot] Failed to load stream "${entry.name}":`, err.message);
+    console.error(`[Bot] Failed to load "${entry.name}":`, err.message);
     currentStreamIndex = (index + 1) % STREAMS.length;
     setTimeout(() => playStream(currentStreamIndex), STREAM_SWITCH_DELAY);
   }
@@ -154,12 +150,12 @@ client.once('ready', () => {
   connectAndPlay();
 });
 
-// Keep the bot alive in environments that kill idle processes
+// Keep the bot alive
 setInterval(() => {
   if (client.isReady()) {
-    client.user.setActivity('Christmas music 24/7', { type: 2 }); // LISTENING
+    client.user.setActivity('music 24/7', { type: 2 }); // LISTENING
   }
-}, 10 * 60 * 1000); // every 10 minutes
+}, 10 * 60 * 1000);
 
 // ─────────────────────────────────────────────
 //  Graceful shutdown
