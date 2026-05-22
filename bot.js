@@ -8,27 +8,23 @@ const {
   entersState,
   StreamType,
 } = require('@discordjs/voice');
-const { stream } = require('play-dl');
+const ytdl = require('ytdl-core');
 require('dotenv').config();
 
 // ─────────────────────────────────────────────
 //  YouTube Videos to Play
-//  Add or remove YouTube URLs here.
-//  The bot plays them in order and loops forever.
 // ─────────────────────────────────────────────
 const STREAMS = [
   { name: 'Video 1', url: 'https://youtu.be/8-Qx2kpTImA?si=wNB-wbKoXlc9fukG' },
   { name: 'Video 2', url: 'https://youtu.be/zw0xIbiw8fo?si=1eHsUgYfWF0MChqs' },
   { name: 'Video 3', url: 'https://youtu.be/JN0lN2S_3jE?si=DUuro_vGcLTG2VwJ' },
-  { name: 'Video 3', url: 'https://youtu.be/YUCMqFrJ2aM?si=sbgLA5kW_ms26IJt' },
-  { name: 'Video 3', url: 'https://youtu.be/fefwYey8rAs?si=Q6oMZBguyOtr_f3L' },
-
-  // Add more videos here...
+  { name: 'Video 4', url: 'https://youtu.be/YUCMqFrJ2aM?si=sbgLA5kW_ms26IJt' },
+  { name: 'Video 5', url: 'https://youtu.be/fefwYey8rAs?si=Q6oMZBguyOtr_f3L' },
 ];
 
-const TARGET_GUILD_ID   = process.env.GUILD_ID;
-const TARGET_CHANNEL_ID = process.env.VOICE_CHANNEL_ID;
-const RECONNECT_DELAY   = 5_000;
+const TARGET_GUILD_ID    = process.env.GUILD_ID;
+const TARGET_CHANNEL_ID  = process.env.VOICE_CHANNEL_ID;
+const RECONNECT_DELAY    = 5_000;
 const STREAM_SWITCH_DELAY = 3_000;
 
 let currentStreamIndex = 0;
@@ -41,7 +37,7 @@ const client = new Client({
 });
 
 // ─────────────────────────────────────────────
-//  Audio player — created once, reused forever
+//  Audio player
 // ─────────────────────────────────────────────
 function createPlayer() {
   const p = createAudioPlayer();
@@ -60,18 +56,23 @@ function createPlayer() {
 }
 
 // ─────────────────────────────────────────────
-//  Play — fetch YouTube stream and hand to player
+//  Play a YouTube video via ytdl-core
 // ─────────────────────────────────────────────
 async function playStream(index) {
   const entry = STREAMS[index % STREAMS.length];
   console.log(`[Bot] Now playing: ${entry.name} — ${entry.url}`);
 
   try {
-    // play-dl handles YouTube URLs natively
-    const source = await stream(entry.url, { quality: 2, discordPlayerCompatibility: true });
-    const resource = createAudioResource(source.stream, {
-      inputType: source.type ?? StreamType.Arbitrary,
+    const ytStream = ytdl(entry.url, {
+      filter: 'audioonly',
+      quality: 'highestaudio',
+      highWaterMark: 1 << 25, // 32MB buffer to prevent stuttering
     });
+
+    const resource = createAudioResource(ytStream, {
+      inputType: StreamType.Arbitrary,
+    });
+
     player.play(resource);
   } catch (err) {
     console.error(`[Bot] Failed to load "${entry.name}":`, err.message);
@@ -150,10 +151,9 @@ client.once('ready', () => {
   connectAndPlay();
 });
 
-// Keep the bot alive
 setInterval(() => {
   if (client.isReady()) {
-    client.user.setActivity('music 24/7', { type: 2 }); // LISTENING
+    client.user.setActivity('music 24/7', { type: 2 });
   }
 }, 10 * 60 * 1000);
 
