@@ -11,12 +11,6 @@ const {
 const ytdl = require('ytdl-core');
 require('dotenv').config();
 
-// Fix encryption error — load libsodium before anything else
-const sodium = require('libsodium-wrappers');
-sodium.ready.then(() => {
-  console.log('[Bot] Sodium ready');
-});
-
 const STREAMS = [
   { name: 'Video 1', url: 'https://youtu.be/8-Qx2kpTImA?si=wNB-wbKoXlc9fukG' },
   { name: 'Video 2', url: 'https://youtu.be/zw0xIbiw8fo?si=1eHsUgYfWF0MChqs' },
@@ -25,9 +19,9 @@ const STREAMS = [
   { name: 'Video 5', url: 'https://youtu.be/fefwYey8rAs?si=Q6oMZBguyOtr_f3L' },
 ];
 
-const TARGET_GUILD_ID    = process.env.GUILD_ID;
-const TARGET_CHANNEL_ID  = process.env.VOICE_CHANNEL_ID;
-const RECONNECT_DELAY    = 5_000;
+const TARGET_GUILD_ID   = process.env.GUILD_ID;
+const TARGET_CHANNEL_ID = process.env.VOICE_CHANNEL_ID;
+const RECONNECT_DELAY   = 5_000;
 const STREAM_SWITCH_DELAY = 3_000;
 
 let currentStreamIndex = 0;
@@ -66,6 +60,11 @@ async function playStream(index) {
       highWaterMark: 1 << 25,
     });
 
+    ytStream.on('error', (err) => {
+      console.error('[ytdl] Stream error:', err.message);
+      setTimeout(playNextStream, STREAM_SWITCH_DELAY);
+    });
+
     const resource = createAudioResource(ytStream, {
       inputType: StreamType.Arbitrary,
     });
@@ -86,11 +85,23 @@ function playNextStream() {
 async function connectAndPlay() {
   if (isShuttingDown) return;
 
+  console.log('[Bot] Attempting to connect...');
+  console.log('[Bot] Guild ID:', TARGET_GUILD_ID);
+  console.log('[Bot] Channel ID:', TARGET_CHANNEL_ID);
+
   const guild = client.guilds.cache.get(TARGET_GUILD_ID);
-  if (!guild) { console.error('[Bot] Guild not found'); return; }
+  if (!guild) {
+    console.error('[Bot] Guild not found! Check GUILD_ID env variable.');
+    return;
+  }
 
   const channel = guild.channels.cache.get(TARGET_CHANNEL_ID);
-  if (!channel) { console.error('[Bot] Voice channel not found'); return; }
+  if (!channel) {
+    console.error('[Bot] Channel not found! Check VOICE_CHANNEL_ID env variable.');
+    return;
+  }
+
+  console.log(`[Bot] Found channel: ${channel.name} (type: ${channel.type})`);
 
   try {
     connection = joinVoiceChannel({
@@ -129,11 +140,12 @@ async function connectAndPlay() {
   }
 }
 
-client.once('ready', async () => {
-  console.log(`[Bot] Logged in as ${client.user.tag}`);
-  await sodium.ready;
+// Use clientReady instead of ready to fix deprecation warning
+client.once('clientReady', async (c) => {
+  console.log(`[Bot] Logged in as ${c.user.tag}`);
   player = createPlayer();
-  connectAndPlay();
+  // Small delay to ensure guilds are cached
+  setTimeout(connectAndPlay, 2000);
 });
 
 setInterval(() => {
