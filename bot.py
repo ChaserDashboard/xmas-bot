@@ -33,7 +33,6 @@ intents.voice_states = True
 client = discord.Client(intents=intents)
 
 current_index = 0
-voice_client = None
 
 
 def get_audio_url(url):
@@ -68,7 +67,6 @@ async def play_next(vc):
 
 @client.event
 async def on_ready():
-    global voice_client
     print(f'[Bot] Logged in as {client.user}')
     await asyncio.sleep(2)
 
@@ -82,12 +80,28 @@ async def on_ready():
         print('[Bot] Channel not found!')
         return
 
-    print(f'[Bot] Joining: {channel.name}')
-    voice_client = await channel.connect()
-    print('[Bot] Connected! Starting playback...')
-    await play_next(voice_client)
+    print(f'[Bot] Joining: {channel.name} (type: {channel.type})')
 
-    # Keep activity updated
+    # Join and immediately request to speak (for stage channels)
+    vc = await channel.connect()
+
+    # If it's a stage channel, request to speak
+    if isinstance(channel, discord.StageChannel):
+        print('[Bot] Stage channel detected — requesting to speak...')
+        try:
+            await guild.me.edit(suppress=False)
+            print('[Bot] Now a speaker!')
+        except Exception as e:
+            print(f'[Bot] Could not become speaker: {e}')
+            try:
+                await guild.me.request_to_speak()
+                print('[Bot] Requested to speak!')
+            except Exception as e2:
+                print(f'[Bot] Request to speak failed: {e2}')
+
+    print('[Bot] Starting playback...')
+    await play_next(vc)
+
     while True:
         await client.change_presence(activity=discord.Activity(
             type=discord.ActivityType.listening, name='music 24/7'))
